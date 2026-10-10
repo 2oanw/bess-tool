@@ -1,0 +1,341 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Công cụ tính toán BESS – Việt Nam</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f3f5f8;color:#1f2a37;font-size:14px}
+header{background:#c7000b;color:#fff;padding:14px 24px}header h1{margin:0;font-size:20px}header p{margin:4px 0 0;opacity:.85;font-size:12px}
+.wrap{display:grid;grid-template-columns:440px 1fr;gap:16px;padding:16px;max-width:1500px;margin:auto}
+.card{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h2{font-size:15px;margin:0 0 10px;color:#c7000b}.card h3{font-size:13px;margin:12px 0 6px}
+label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:5px 0}label span{flex:1}
+input,select{padding:5px 7px;border:1px solid #cfd6df;border-radius:6px;font-size:13px;width:150px}input[type=checkbox]{width:auto}
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #e3e7ec;padding:4px 6px;text-align:right}th{background:#f7f8fa;text-align:center}
+td input{width:100%;border:none;text-align:right;padding:2px}td:first-child{text-align:left}
+details{border-top:1px dashed #ccd;margin-top:10px;padding-top:6px}summary{cursor:pointer;font-weight:600;color:#334}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.kpi{background:#fff6f6;border:1px solid #f1d2d2;border-radius:8px;padding:10px}
+.kpi b{display:block;font-size:18px;color:#c7000b;margin-top:4px}.kpi small{color:#667}
+.sched{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;margin:6px 0}.sched div{font-size:10px;text-align:center;padding:6px 0;border-radius:3px;cursor:pointer;user-select:none;color:#fff}
+.C{background:#2b8a3e}.D{background:#e8590c}.I{background:#adb5bd}
+.note{font-size:11px;color:#6b7280}.warn{color:#b45309;font-size:11px}
+button{background:#c7000b;color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:13px}button.sec{background:#455a64}
+.chart svg{width:100%;height:auto}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.legend{font-size:11px}.legend i{display:inline-block;width:10px;height:10px;margin:0 4px 0 10px;border-radius:2px}
+.neg{color:#c92a2a}.scroll{overflow-x:auto}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
+@media print{header{background:#fff;color:#000;border-bottom:2px solid #c7000b}#inputs,.noprint{display:none!important}.wrap{display:block;padding:0}
+.card{box-shadow:none;border:1px solid #ddd;page-break-inside:avoid}body{background:#fff}.kpis{grid-template-columns:repeat(4,1fr)}}
+</style></head><body>
+<header><h1>Công cụ tính toán dung lượng & hoàn vốn hệ thống lưu trữ (BESS)</h1><p id="hdr">Chỉ pin lưu trữ – không có điện mặt trời · Biểu giá EVN theo QĐ 1279/QĐ-BCT (10/5/2025), chưa gồm VAT</p></header>
+<div class="wrap">
+<div id="inputs">
+ <div class="card"><h2>1. Khách hàng / Dự án</h2>
+  <label><span>Tên dự án</span><input id="name"></label>
+  <label><span>Loại khách hàng</span><select id="custType"><option>Sản xuất</option><option>Kinh doanh</option><option>Sinh hoạt</option></select></label>
+  <label><span>Cấp điện áp</span><select id="voltage"></select></label>
+ </div>
+ <div class="card"><h2>2. Giá điện EVN (đ/kWh)</h2>
+  <div id="priceBox"></div>
+  <label><span>Tăng giá điện hằng năm (%)</span><input id="priceGrowth" type="number" step="0.1"></label>
+  <div class="note">Khung giờ T2–T7: cao điểm 9:30–11:30 & 17:00–20:00; thấp điểm 22:00–04:00; còn lại bình thường. Chủ nhật: không có cao điểm; 4:00–22:00 bình thường, còn lại thấp điểm.</div>
+ </div>
+ <div class="card"><h2>3. Tiêu thụ điện</h2>
+  <label><span>Điện năng tiêu thụ năm (kWh)</span><input id="annual" type="number"></label>
+  <label><span>Biểu đồ phụ tải ngày làm việc</span><select id="profWorkName"></select></label>
+  <label><span>Biểu đồ phụ tải Chủ nhật</span><select id="profWeekendName"></select></label>
+  <details><summary>Nâng cao – tiêu thụ</summary>
+   <label><span>Tỷ lệ tiêu thụ ngày làm việc : Chủ nhật</span><input id="wkRatio" type="number" step="0.1"></label>
+   <label><span>Tăng tiêu thụ hằng năm (%)</span><input id="loadGrowth" type="number" step="0.1"></label>
+   <h3>Điện năng theo tháng (kWh)</h3><div id="monthBox"></div>
+   <h3>Tỷ trọng theo giờ (%) – Tùy chỉnh</h3><div id="profBox" class="scroll"></div>
+  </details>
+ </div>
+ <div class="card"><h2>4. Pin lưu trữ</h2>
+  <label><span>Model tủ pin</span><select id="model"></select></label>
+  <label><span>Số lượng tủ</span><input id="qty" type="number" min="1"></label>
+  <label><span>Dung lượng pin (kWh)</span><input id="cap" type="number"></label>
+  <label><span>Công suất PCS (kW)</span><input id="pcs" type="number"></label>
+  <label><span>Đơn giá (đ/kWh)</span><input id="priceKwh" type="number"></label>
+  <label><span>Chi phí O&M (đ/kWh/năm)</span><input id="om" type="number"></label>
+  <label><span>Chế độ vận hành</span><select id="mode"><option value="tou">Chênh lệch giá (sạc thấp điểm – xả cao điểm)</option><option value="peakshave">Cắt đỉnh phụ tải</option><option value="backup">Chênh lệch giá + dự phòng</option></select></label>
+  <div id="schedWrap"><div class="note">Lịch sạc/xả theo giờ (bấm để đổi): <span class="legend"><i class="C"></i>Sạc<i class="D"></i>Xả<i class="I"></i>Nghỉ</span></div><div class="sched" id="sched"></div></div>
+  <label id="plWrap"><span>Ngưỡng cắt đỉnh (kW)</span><input id="peakLimit" type="number"></label>
+  <details><summary>Nâng cao – pin</summary>
+   <label><span>SOC kết thúc sạc (%)</span><input id="socMax" type="number"></label>
+   <label><span>SOC kết thúc xả (%)</span><input id="socMin" type="number"></label>
+   <label><span>SOC dự phòng tối thiểu (%)</span><input id="backupSoc" type="number"></label>
+   <label><span>Hiệu suất chu trình RTE (%)</span><input id="rte" type="number"></label>
+   <label><span>Không xả Chủ nhật</span><input id="noSunday" type="checkbox"></label>
+   <label><span>Chỉ xả khi giá ≥</span><select id="minDisBand"><option value="1">Bình thường</option><option value="2">Cao điểm</option><option value="0">Mọi giờ xả</option></select></label>
+   <label><span>Suy giảm dung lượng</span><select id="degMode"><option value="default">Đường cong mặc định</option><option value="fixed">Cố định</option><option value="custom">Tùy chỉnh theo năm</option></select></label>
+   <div id="degFixed"><label><span>Năm đầu (%)</span><input id="degFirst" type="number" step="0.1"></label><label><span>Các năm sau (%/năm)</span><input id="degNext" type="number" step="0.1"></label></div>
+   <div id="degCustomBox" class="scroll"></div>
+   <label><span>Thay pin vào năm (0 = không)</span><input id="replaceYear" type="number"></label>
+   <label><span>Chi phí thay (% vốn ban đầu)</span><input id="replaceCost" type="number"></label>
+  </details>
+ </div>
+ <div class="card"><h2>5. Tài chính</h2>
+  <label><span>Số năm dự án</span><input id="years" type="number"></label>
+  <label><span>Tỷ lệ chiết khấu (%)</span><input id="disc" type="number" step="0.1"></label>
+  <details><summary>Nâng cao – tài chính</summary>
+   <label><span>Giá trị còn lại (%)</span><input id="residual" type="number"></label>
+   <label><span>VAT thiết bị (%)</span><input id="vatDev" type="number"></label>
+   <label><span>VAT O&M (%)</span><input id="vatOm" type="number"></label>
+   <label><span>Áp dụng thuế TNDN</span><input id="taxOn" type="checkbox"></label>
+   <label><span>Thuế TNDN (%)</span><input id="tax" type="number"></label>
+   <label><span>Vay vốn</span><input id="loanOn" type="checkbox"></label>
+   <label><span>Tỷ lệ vay (% vốn)</span><input id="loanPct" type="number"></label>
+   <label><span>Lãi suất vay (%/năm)</span><input id="loanRate" type="number" step="0.1"></label>
+   <label><span>Thời hạn vay (năm)</span><input id="loanTerm" type="number"></label>
+   <label><span>Hỗ trợ / trợ giá (đ)</span><input id="subsidy" type="number"></label>
+   <div class="note">Thuế TNDN mặc định tắt (hoàn vốn giản đơn). Khi bật: thuế = 25% × (tiết kiệm − O&M − khấu hao đường thẳng).</div>
+  </details>
+ </div>
+ <div class="noprint"><button onclick="resetAll()" class="sec">Khôi phục mặc định</button></div>
+</div>
+<div id="out">
+ <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><h2 id="ovTitle">Tổng quan</h2><button class="noprint" onclick="window.print()">In báo cáo</button></div>
+  <div id="overview" class="note" style="font-size:13px;color:#333"></div></div>
+ <div class="card"><h2>Thông số thiết bị</h2><div id="spec"></div></div>
+ <div class="card"><h2>Chỉ số tài chính</h2><div class="kpis" id="kpis"></div><div id="warn" class="warn"></div></div>
+ <div class="grid2">
+  <div class="card chart"><h2>Biểu đồ giá điện 24h</h2><div id="chPrice"></div></div>
+  <div class="card chart"><h2>Biểu đồ phụ tải ngày (%)</h2><div id="chProf"></div></div>
+  <div class="card chart"><h2>Điện năng tiêu thụ theo tháng (kWh)</h2><div id="chMonth"></div></div>
+  <div class="card chart"><h2>Dòng tiền cộng dồn (triệu đ)</h2><div id="chCum"></div></div>
+  <div class="card chart"><h2>Tiền điện trước/sau theo năm (triệu đ)</h2><div id="chBillY"></div></div>
+  <div class="card chart"><h2>Tiền điện trước/sau theo tháng – năm 1 (triệu đ)</h2><div id="chBillM"></div></div>
+  <div class="card chart"><h2>Đường cong suy giảm dung lượng (%)</h2><div id="chDeg"></div></div>
+  <div class="card"><h2>Năng lượng năm 1</h2><div id="energy"></div></div>
+ </div>
+ <div class="card"><h2>Bảng dòng tiền theo năm (đ)</h2><div class="scroll" id="cfTable"></div></div>
+ <div class="card note">Giả định & giới hạn: mô phỏng 365 ngày × 48 khung 30 phút cho mỗi năm; phụ tải = điện năng tháng × tỷ trọng giờ; pin chỉ cấp cho tải, không phát lên lưới; năng lượng sạc = năng lượng xả / RTE; dung lượng khả dụng = dung lượng × (SOC max − SOC min) × hệ số suy giảm (trung bình đầu/cuối năm). Với khách hàng Sinh hoạt (giá bậc thang, không có TOU), pin chỉ làm tăng điện năng do tổn hao nên tiết kiệm ≈ 0 hoặc âm – chỉ mang tính tham khảo (dự phòng). Giá bậc >300 kWh cần kiểm tra. Hoàn vốn = năm k + |lũy kế k| / dòng tiền năm k+1. LCOS = (vốn + PV O&M + PV thay pin − PV giá trị còn lại) / PV điện năng xả. Không tính giảm CO₂ (không có PV).</div>
+</div></div>
+<script>/* BESS engine – shared by index.html (inlined) and test.js */
+(function(root){
+const TARIFF = {
+  'Sản xuất': {'>=110kV':[1146,1811,3266],'22-<110kV':[1190,1833,3398],'6-<22kV':[1234,1899,3508],'<6kV':[1300,1987,3640]},
+  'Kinh doanh': {'>=22kV':[1609,2887,5025],'6-<22kV':[1829,3108,5202],'<6kV':[1918,3152,5422]},
+  'Sinh hoạt': {'Hạ áp':null}
+};
+// tiers: [upper kWh, price]; >300 values editable, "cần kiểm tra"
+const TIERS = [[50,1984],[100,2050],[200,2380],[300,2998],[400,3350],[Infinity,3460]];
+const DEG_DEFAULT=[100,94,91.5,89.5,87.8,86.2,84.6,83.1,81.6,80.2,78.7,77.4,76,74.6,73.3,72,70.7,69.4,68.1,66.8,65.5];
+const PROFILES = {
+ 'Thương mại cao điểm tối':[1,1,1,1,1,1.5,2,3,4,5,5,5,5,5,5,5,5.5,7,8,8,7,5,3,2],
+ 'Thương mại cao điểm ngày':[1,1,1,1,1,1.5,2.5,4,6,7,7.5,7.5,7,7,7.5,7.5,7,6,4,3,2,1.5,1,1],
+ 'Thương mại 2 đỉnh':[1,1,1,1,1,1.5,2.5,4,6,7,7,6,5,5,5.5,6,6.5,7,7,6,4,2.5,1.5,1],
+ 'Công nghiệp liên tục':Array(24).fill(100/24),
+ 'Công nghiệp 2 đỉnh':[1.5,1.5,1.5,1.5,1.5,2,3,5,6.5,7,7,5,4,6,7,7,6.5,5.5,4,3,2.5,2,1.5,1.5],
+ 'Công nghiệp 3 ca':[3.8,3.8,3.8,3.8,3.8,3.8,4,4.3,4.5,4.6,4.6,4.4,4,4.4,4.6,4.6,4.5,4.2,4,4,4,4,4,3.9]
+};
+// Editable product DB – add more objects here
+const MODELS=[
+ {id:'LUNA2000-215-2S10',cap:215.0,cp:0.5,rte:91.3,dod:'0–100%',cell:'280Ah',cfg:'240S1P',packs:4,volt:'648–864 V',weight:'≤2,8 t',dim:'1150×1800×2100 mm'},
+ {id:'LUNA2000-241-2S1',cap:241.0,cp:null,rte:91.3,dod:'0–100%',cell:'314Ah',cfg:'240S1P',packs:4,volt:'648–852 V',weight:'<2,8 t',dim:'–'},
+ {id:'LUNA2000-215-2S11',cap:215.0,cp:0.5,rte:89.0,dod:'–',cell:'280Ah',cfg:'240S1P',packs:4,volt:'648–864 V',weight:'≤2,8 t',dim:'–'},
+ {id:'LUNA2000-161-2S11',cap:161.3,cp:0.67,rte:88.0,dod:'–',cell:'280Ah',cfg:'180S1P',packs:3,volt:'486–648 V',weight:'≤2,4 t',dim:'–'},
+ {id:'LUNA2000-107-1S11',cap:107.5,cp:1,rte:86.0,dod:'–',cell:'280Ah',cfg:'120S1P',packs:2,volt:'324–432 V',weight:'≤2,0 t',dim:'–'}];
+const MODEL_COMMON={pcs:'PCS2000-108K-MB1',pcsKw:108,type:'Huawei Smart String ESS làm mát bằng chất lỏng, LFP',temp:'-30…55 °C',ip:'IP55',aux:'≤150 W',comm:'Modbus TCP'};
+function applyModel(p){const m=MODELS.find(x=>x.id===p.model);if(!m)return p;const q=p.qty||1;
+ p.cap=+(m.cap*q).toFixed(1);p.pcs=+(Math.min(MODEL_COMMON.pcsKw,m.cp?m.cap*m.cp:Infinity)*q).toFixed(1);p.rte=m.rte/100;return p;}
+const DAYS=[31,28,31,30,31,30,31,31,30,31,30,31];
+// band of half-hour slot s (0..47), dow 0=Sun. 0=thấp,1=bình thường,2=cao
+function band(dow,s){const h=s/2;
+  if(dow===0) return (h>=4&&h<22)?1:0;
+  if(h>=22||h<4) return 0;
+  if((h>=9.5&&h<11.5)||(h>=17&&h<20)) return 2;
+  return 1;}
+function norm(a){const t=a.reduce((x,y)=>x+y,0)||1;return a.map(v=>v*100/t);}
+function splitMonths(annual){const t=365;return DAYS.map(d=>annual*d/t);}
+function degCurve(p,years){
+  const out=[];for(let y=0;y<=years;y++){let v;
+    if(p.degMode==='fixed') v= y===0?100:100-(p.degFirst)-(y-1)*p.degNext;
+    else if(p.degMode==='custom') v=p.degCustom[y]!=null?p.degCustom[y]:(p.degCustom[p.degCustom.length-1]||100);
+    else v=DEG_DEFAULT[Math.min(y,20)]-(y>20?(y-20)*1.3:0);
+    out.push(Math.max(v,0));}
+  if(p.replaceYear>0){for(let y=p.replaceYear;y<=years;y++) out[y]=out[y-p.replaceYear];}
+  return out;}
+function tierBill(kwh,tiers){let b=0,prev=0;for(const [up,pr] of tiers){if(kwh<=prev)break;b+=(Math.min(kwh,up)-prev)*pr;prev=up;}return b;}
+
+// simulate one year; returns monthly & annual energies/bills
+function simYear(p,loadScale,degF,priceF){
+  const price=p.prices; const res={chg:0,dis:0,before:0,after:0,m:[]};
+  const usable=p.cap*(p.socMax-Math.max(p.socMin,p.mode==='backup'?p.backupSoc:0))*degF;
+  const pcsH=p.pcs*0.5; const rte=p.rte;
+  const wp=norm(p.profWork), ep=norm(p.profWeekend);
+  let stored=0, dow=4; // 2026-01-01 is Thursday
+  for(let m=0;m<12;m++){
+    const nd=DAYS[m]; let nW=0,nE=0;
+    for(let d=0;d<nd;d++){((dow+d)%7===0)?nE++:nW++;}
+    const unit=p.monthKwh[m]*loadScale/(nW*p.wkRatio+nE); // kWh per weekend-day
+    const mm={load:0,chg:0,dis:0,before:0,after:0,gridAfter:0};
+    for(let d=0;d<nd;d++,dow=(dow+1)%7){
+      const isW=dow!==0, dayK=unit*(isW?p.wkRatio:1), prof=isW?wp:ep;
+      // peak-shaving threshold: max kW limit
+      for(let s=0;s<48;s++){
+        const h=s>>1, L=dayK*prof[h]/100/2, b=band(dow,s), pr=price[b]*priceF;
+        let ch=0,di=0; const act=p.schedule[h];
+        if(p.mode==='peakshave'){
+          const lim=p.peakLimit*0.5;
+          if(L>lim){di=Math.min(L-lim,pcsH,stored);}
+          else if(b===0){ch=Math.min(pcsH*rte,usable-stored);}
+        } else {
+          if(act==='D' && !(dow===0&&p.noSunday) && b>=p.minDisBand){di=Math.min(L,pcsH,stored);}
+          else if(act==='C'){ch=Math.min(pcsH*rte,usable-stored);} // stored in delivered units
+        }
+        if(ch<0)ch=0; stored+=ch-di; const gridCh=ch/rte;
+        mm.load+=L; mm.chg+=gridCh; mm.dis+=di;
+        mm.before+=L*pr; mm.after+=(L-di+gridCh)*pr; mm.gridAfter+=L-di+gridCh;
+      }
+    }
+    if(p.custType==='Sinh hoạt'){mm.before=tierBill(mm.load,p.tiers)*priceF;mm.after=tierBill(mm.gridAfter,p.tiers)*priceF;}
+    res.m.push(mm); res.chg+=mm.chg; res.dis+=mm.dis; res.before+=mm.before; res.after+=mm.after;
+  }
+  res.usable=usable; res.cycles=usable>0?res.dis/(p.cap*(p.socMax-p.socMin)):0; return res;}
+
+function payback(cf){ // cf[0..N] net flows; interpolated simple payback
+  let cum=cf[0]; if(cum>=0) return 0;
+  for(let k=1;k<cf.length;k++){const nc=cum+cf[k]; if(nc>=0) return (k-1)+Math.abs(cum)/cf[k]; cum=nc;}
+  return null;}
+function npv(r,cf){return cf.reduce((s,v,i)=>s+v/Math.pow(1+r,i),0);}
+function irr(cf){let lo=-0.99,hi=1;if(npv(lo,cf)*npv(hi,cf)>0)return null;
+  for(let i=0;i<200;i++){const m=(lo+hi)/2;(npv(m,cf)>0)?lo=m:hi=m;}return (lo+hi)/2;}
+
+function run(p){
+  const N=p.years, deg=degCurve(p,N);
+  const capex=p.cap*p.priceKwh*(1+p.vatDev);
+  const subsidy=p.subsidy||0;
+  const loanAmt=p.loanOn?capex*p.loanPct:0;
+  const ann=loanAmt>0?(p.loanRate>0?loanAmt*p.loanRate/(1-Math.pow(1+p.loanRate,-p.loanTerm)):loanAmt/p.loanTerm):0;
+  const rows=[{y:0,inv:-capex,om:0,sav:0,loan:loanAmt,tax:0,res:0,net:-capex+loanAmt+subsidy}];
+  rows[0].sub=subsidy;
+  let cum=rows[0].net; rows[0].cum=cum;
+  const years=[]; let pvCost=capex-subsidy, pvDis=0;
+  const dep=(capex/(1+p.vatDev))/N;
+  for(let y=1;y<=N;y++){
+    const degF=(deg[y-1]+deg[y])/200;
+    const g=Math.pow(1+p.loadGrowth,y-1), pf=Math.pow(1+p.priceGrowth,y-1);
+    const s=simYear(p,g,degF,pf); years.push(s);
+    const om=-p.cap*p.om*(1+p.vatOm);
+    const sav=s.before-s.after;
+    const repl=(p.replaceYear>0&&y===p.replaceYear)?-capex*p.replaceCost:0;
+    const loanPay=(loanAmt>0&&y<=p.loanTerm)?-ann:0;
+    const tax=p.taxOn?-Math.max(0,(sav+om/(1+p.vatOm)-dep)*p.tax):0;
+    const resv=(y===N)?capex*p.residual:0;
+    const net=sav+om+repl+loanPay+tax+resv; cum+=net;
+    rows.push({y,inv:repl,om,sav,loan:loanPay,tax,res:resv,net,cum,before:s.before,after:s.after,chg:s.chg,dis:s.dis,cycles:s.cycles,deg:deg[y]});
+    const df=Math.pow(1+p.disc,y); pvCost+=(-om-repl)/df - resv/df; pvDis+=s.dis/df;
+  }
+  const cf=rows.map(r=>r.net);
+  return {rows,years,deg,capex,omTotal:rows.reduce((a,r)=>a+r.om,0),cum,
+    npv:npv(p.disc,cf),irr:irr(cf),payback:payback(cf),lcos:pvDis>0?pvCost/pvDis:null};
+}
+function defaults(){
+  const sched=Array(24).fill('I');[22,23,0,1,2,3].forEach(h=>sched[h]='C');[9,10,11,17,18,19].forEach(h=>sched[h]='D');
+  return applyModel({model:'LUNA2000-215-2S10',qty:1,name:'Dự án BESS mẫu',custType:'Sản xuất',voltage:'22-<110kV',prices:[1190,1833,3398],tiers:TIERS.map(t=>t.slice()),
+   priceGrowth:0.01,annual:145000,monthKwh:splitMonths(145000),profWork:PROFILES['Thương mại 2 đỉnh'].slice(),profWeekend:PROFILES['Thương mại 2 đỉnh'].map(v=>v),
+   profWorkName:'Thương mại 2 đỉnh',profWeekendName:'Thương mại 2 đỉnh',wkRatio:1.0,loadGrowth:0.01,
+   cap:215,pcs:108,priceKwh:5000000,om:50000,mode:'tou',schedule:sched,noSunday:true,minDisBand:1,peakLimit:30,
+   socMax:0.98,socMin:0.10,backupSoc:0.40,rte:0.92,degMode:'default',degFirst:5,degNext:2.5,degCustom:DEG_DEFAULT.slice(),replaceYear:0,replaceCost:0.6,
+   years:20,disc:0.06,residual:0.05,vatDev:0.10,vatOm:0.10,taxOn:false,tax:0.25,loanOn:false,loanPct:0.7,loanRate:0.09,loanTerm:7,subsidy:0});
+}
+const E={MODELS,MODEL_COMMON,applyModel,TARIFF,TIERS,DEG_DEFAULT,PROFILES,DAYS,band,norm,splitMonths,degCurve,tierBill,simYear,payback,npv,irr,run,defaults};
+if(typeof module!=='undefined')module.exports=E; else root.BESS=E;
+})(this);
+</script>
+<script>
+const E=BESS;let P=E.defaults();
+const PCT=['priceGrowth','loadGrowth','socMax','socMin','backupSoc','rte','replaceCost','disc','residual','vatDev','vatOm','tax','loanPct','loanRate'];
+const NUM=['qty','annual','wkRatio','cap','pcs','priceKwh','om','peakLimit','degFirst','degNext','replaceYear','years','loanTerm','subsidy','minDisBand'];
+const $=id=>document.getElementById(id);
+const vnd=x=>x==null||!isFinite(x)?'–':Math.round(x).toLocaleString('vi-VN');
+const tr=x=>(x/1e6).toLocaleString('vi-VN',{maximumFractionDigits:1});
+const BN=['Thấp điểm','Bình thường','Cao điểm'];
+function fillForm(){
+ $('name').value=P.name;$('custType').value=P.custType;setVolt();
+ PCT.forEach(k=>$(k).value=+(P[k]*100).toFixed(3));NUM.forEach(k=>$(k).value=P[k]);
+ $('model').innerHTML=E.MODELS.map(m=>`<option>${m.id}</option>`).join('')+'<option value="custom">Tùy chỉnh</option>';
+ ['model','mode','degMode'].forEach(k=>$(k).value=P[k]);['noSunday','taxOn','loanOn'].forEach(k=>$(k).checked=P[k]);
+ const opts=Object.keys(E.PROFILES).concat('Tùy chỉnh').map(n=>`<option>${n}</option>`).join('');
+ $('profWorkName').innerHTML=opts;$('profWeekendName').innerHTML=opts;$('profWorkName').value=P.profWorkName;$('profWeekendName').value=P.profWeekendName;
+ render();}
+function setVolt(){const t=E.TARIFF[P.custType];$('voltage').innerHTML=Object.keys(t).map(v=>`<option>${v}</option>`).join('');
+ if(!t[P.voltage])P.voltage=Object.keys(t)[0];$('voltage').value=P.voltage;}
+function priceBox(){
+ if(P.custType==='Sinh hoạt'){let lo=0;$('priceBox').innerHTML='<table><tr><th>Bậc (kWh/tháng)</th><th>Giá</th></tr>'+P.tiers.map((t,i)=>{const r=`<tr><td>${lo+ (i?1:0)}–${t[0]===Infinity?'trở lên':t[0]}${i>=4?' <span class="warn">(cần kiểm tra)</span>':''}</td><td><input data-tier="${i}" type="number" value="${t[1]}"></td></tr>`;lo=t[0];return r;}).join('')+'</table><div class="warn">Sinh hoạt không áp dụng giá theo giờ – pin hầu như không tạo tiết kiệm.</div>';}
+ else $('priceBox').innerHTML='<table><tr><th>Thấp điểm</th><th>Bình thường</th><th>Cao điểm</th></tr><tr>'+P.prices.map((v,i)=>`<td><input data-price="${i}" type="number" value="${v}"></td>`).join('')+'</tr></table>';}
+function monthBox(){$('monthBox').innerHTML='<table><tr>'+P.monthKwh.map((v,i)=>`<th>T${i+1}</th>`).join('')+'</tr><tr>'+P.monthKwh.map((v,i)=>`<td><input data-month="${i}" type="number" value="${Math.round(v)}"></td>`).join('')+'</tr></table>';}
+function profBox(){let h='<table><tr><th>Giờ</th>'+[...Array(24).keys()].map(i=>`<th>${i}</th>`).join('')+'</tr>';
+ [['profWork','Làm việc'],['profWeekend','CN']].forEach(([k,n])=>h+=`<tr><td>${n}</td>`+P[k].map((v,i)=>`<td><input style="width:34px" data-prof="${k}" data-h="${i}" type="number" step="0.1" value="${+v.toFixed(2)}"></td>`).join('')+'</tr>');
+ $('profBox').innerHTML=h+'</table>';}
+function degBox(){$('degFixed').style.display=P.degMode==='fixed'?'':'none';
+ $('degCustomBox').innerHTML=P.degMode!=='custom'?'':'<table><tr>'+P.degCustom.map((v,i)=>`<th>${i}</th>`).join('')+'</tr><tr>'+P.degCustom.map((v,i)=>`<td><input style="width:38px" data-deg="${i}" type="number" step="0.1" value="${v}"></td>`).join('')+'</tr></table>';}
+function sched(){$('sched').innerHTML=P.schedule.map((a,i)=>`<div class="${a}" data-s="${i}" title="${i}:00">${i}</div>`).join('');
+ $('schedWrap').style.display=P.mode==='peakshave'?'none':'';$('plWrap').style.display=P.mode==='peakshave'?'':'none';}
+function readForm(e){const t=e.target;
+ if(t.dataset.price!=null)P.prices[+t.dataset.price]=+t.value;
+ else if(t.dataset.tier!=null)P.tiers[+t.dataset.tier][1]=+t.value;
+ else if(t.dataset.month!=null){P.monthKwh[+t.dataset.month]=+t.value;P.annual=P.monthKwh.reduce((a,b)=>a+b,0);$('annual').value=Math.round(P.annual);}
+ else if(t.dataset.prof){P[t.dataset.prof][+t.dataset.h]=+t.value;$(t.dataset.prof+'Name').value='Tùy chỉnh';P[t.dataset.prof+'Name']='Tùy chỉnh';}
+ else if(t.dataset.deg!=null)P.degCustom[+t.dataset.deg]=+t.value;
+ else if(PCT.includes(t.id))P[t.id]=+t.value/100;
+ else if(NUM.includes(t.id)){P[t.id]=+t.value;if(t.id==='annual'){P.monthKwh=E.splitMonths(P.annual);monthBox();}}
+ else if(t.type==='checkbox')P[t.id]=t.checked;
+ else if(t.id==='custType'){P.custType=t.value;setVolt();P.prices=(E.TARIFF[P.custType][P.voltage]||P.prices).slice();priceBox();}
+ else if(t.id==='voltage'){P.voltage=t.value;const v=E.TARIFF[P.custType][P.voltage];if(v)P.prices=v.slice();priceBox();}
+ else if(t.id==='profWorkName'||t.id==='profWeekendName'){P[t.id]=t.value;const k=t.id.replace('Name','');if(E.PROFILES[t.value])P[k]=E.PROFILES[t.value].slice();profBox();}
+ else if(t.id){P[t.id]=t.type==='number'?+t.value:t.value;}
+ if(t.id==='model'||t.id==='qty'){E.applyModel(P);['cap','pcs'].forEach(k=>$(k).value=P[k]);$('rte').value=+(P.rte*100).toFixed(2);}
+ if(['cap','pcs','rte'].includes(t.id)&&P.model!=='custom'){P.model='custom';$('model').value='custom';}
+ if(t.id==='degMode')degBox();if(t.id==='mode')sched();
+ calc();}
+function render(){priceBox();monthBox();profBox();degBox();sched();calc();}
+function resetAll(){P=E.defaults();fillForm();}
+/* ---- SVG charts ---- */
+function chart(el,{labels,series,type='bar',step=false,yfmt=v=>v.toLocaleString('vi-VN')}){
+ const W=560,H=230,L=54,R=10,T=14,B=34,n=labels.length;const all=series.flatMap(s=>s.data);
+ let mx=Math.max(0,...all),mn=Math.min(0,...all);if(mx===mn)mx=mn+1;const pad=(mx-mn)*.08;mx+=pad;if(mn<0)mn-=pad;
+ const X=i=>L+(W-L-R)*(type==='bar'?(i+.5)/n:(step?i/n:i/(n-1||1))),Y=v=>T+(H-T-B)*(mx-v)/(mx-mn);
+ let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-size="10">`;
+ for(let k=0;k<=4;k++){const v=mn+(mx-mn)*k/4,y=Y(v);s+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#eee"/><text x="${L-4}" y="${y+3}" text-anchor="end" fill="#666">${yfmt(v)}</text>`;}
+ s+=`<line x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}" stroke="#999"/>`;
+ const ev=Math.ceil(n/14);labels.forEach((l,i)=>{if(i%ev===0)s+=`<text x="${type==='bar'?X(i):X(i)+(step?(W-L-R)/n/2:0)}" y="${H-B+14}" text-anchor="middle" fill="#666">${l}</text>`;});
+ const bw=(W-L-R)/n*.8/series.length;
+ series.forEach((se,j)=>{if(type==='bar'){se.data.forEach((v,i)=>{const x=X(i)-(W-L-R)/n*.4+j*bw,y0=Y(0),y=Y(v);s+=`<rect x="${x}" y="${Math.min(y,y0)}" width="${bw-1}" height="${Math.abs(y0-y)}" fill="${se.color&&typeof se.color==='function'?se.color(v,i):se.color}"><title>${l(labels[i])}: ${vnd(v)}</title></rect>`;});}
+  else{let d='';se.data.forEach((v,i)=>{if(step){d+=(i?'L':'M')+X(i)+','+Y(v)+'L'+X(i+1)+','+Y(v);}else d+=(i?'L':'M')+X(i)+','+Y(v);});s+=`<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2"/>`;
+   if(!step)se.data.forEach((v,i)=>s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="2.5" fill="${se.color}"><title>${labels[i]}: ${vnd(v)}</title></circle>`);}});
+ s+='</svg>'+(series.length>1||series[0].name?'<div class="legend">'+series.map(se=>`<i style="background:${typeof se.color==='string'?se.color:'#888'}"></i>${se.name||''}`).join('')+'</div>':'');
+ el.innerHTML=s;function l(x){return x}}
+function calc(){
+ let r;try{r=E.run(P);}catch(err){$('warn').textContent='Lỗi: '+err.message;return;}
+ const y1=r.rows[1];const md=E.MODELS.find(x=>x.id===P.model),C=E.MODEL_COMMON;
+ $('spec').innerHTML=md?`<table><tr><th>Model</th><th>Số tủ</th><th>Dung lượng/tủ</th><th>C-rate</th><th>RTE</th><th>DoD</th><th>Cell</th><th>Cấu hình</th><th>Số pack</th><th>Điện áp DC</th><th>Khối lượng</th><th>Kích thước</th></tr><tr><td>${md.id}</td><td>${P.qty}</td><td>${md.cap} kWh</td><td>${md.cp?md.cp+' CP':'– (giới hạn PCS)'}</td><td>${md.rte}%</td><td>${md.dod}</td><td>${md.cell}</td><td>${md.cfg}</td><td>${md.packs}</td><td>${md.volt}</td><td>${md.weight}</td><td>${md.dim}</td></tr></table><div class="note">${C.type} · PCS ${C.pcs} (${C.pcsKw} kW AC/tủ) · Công suất hiệu dụng = min(PCS, dung lượng × C-rate) = ${vnd(P.pcs)} kW · Nhiệt độ ${C.temp} · ${C.ip} · Tự dùng ${C.aux} · ${C.comm}</div>`:'<div class="note">Thiết bị tùy chỉnh (nhập tay).</div>';
+ $('hdr').textContent=`${P.name} · ${P.custType} · ${P.voltage} · Biểu giá EVN QĐ 1279/QĐ-BCT (10/5/2025), chưa gồm VAT · Chỉ pin lưu trữ – không có PV`;
+ $('ovTitle').textContent='Tổng quan – '+P.name;
+ $('overview').innerHTML=`Dung lượng pin: <b>${vnd(P.cap)} kWh</b> · Công suất PCS: <b>${vnd(P.pcs)} kW</b> · Thời gian xả ≈ <b>${(P.cap/P.pcs).toFixed(1)} h</b> · Chế độ: <b>${$('mode').selectedOptions[0].text}</b> · Tiêu thụ năm: <b>${vnd(P.annual)} kWh</b> · Dự án <b>${P.years} năm</b>`;
+ const k=[['Vốn đầu tư ban đầu',vnd(r.capex)+' đ','gồm VAT thiết bị'],['Chi phí O&M tổng',vnd(-r.omTotal)+' đ',P.years+' năm, gồm VAT'],
+  [`Lợi nhuận ròng cộng dồn ${P.years} năm`,vnd(r.cum)+' đ',''],['NPV',vnd(r.npv)+' đ','chiết khấu '+(P.disc*100)+'%'],
+  ['IRR',r.irr==null?'–':(r.irr*100).toFixed(2)+'%',''],['Thời gian hoàn vốn',r.payback==null?'Không hoàn vốn':r.payback.toFixed(2)+' năm','giản đơn, nội suy'],
+  ['LCOS',vnd(r.lcos)+' đ/kWh','chi phí san bằng / kWh xả'],['Tiết kiệm năm 1',vnd(y1.sav)+' đ',vnd(y1.before)+' → '+vnd(y1.after)]];
+ $('kpis').innerHTML=k.map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b>${b}</b><small>${c}</small></div>`).join('');
+ $('warn').textContent=P.custType==='Sinh hoạt'?'Lưu ý: giá Sinh hoạt bậc thang không có TOU – tiết kiệm từ pin chỉ mang tính tham khảo.':(y1.sav<=0?'Tiết kiệm ≤ 0: kiểm tra lịch sạc/xả.':'');
+ const pr=[...Array(48).keys()];
+ chart($('chPrice'),{labels:pr.map(s=>s%2?'':s/2+'h'),step:true,type:'line',series:[{name:'T2–T7',color:'#c7000b',data:pr.map(s=>P.custType==='Sinh hoạt'?P.tiers[0][1]:P.prices[E.band(1,s)])},{name:'Chủ nhật',color:'#1c7ed6',data:pr.map(s=>P.custType==='Sinh hoạt'?P.tiers[0][1]:P.prices[E.band(0,s)])}]});
+ const nw=E.norm(P.profWork),ne=E.norm(P.profWeekend);
+ chart($('chProf'),{labels:[...Array(24).keys()].map(h=>h+'h'),type:'bar',yfmt:v=>v.toFixed(1),series:[{name:'Ngày làm việc',color:'#e8590c',data:nw},{name:'Chủ nhật',color:'#1c7ed6',data:ne}]});
+ chart($('chMonth'),{labels:P.monthKwh.map((v,i)=>'T'+(i+1)),series:[{color:'#2b8a3e',data:P.monthKwh}]});
+ chart($('chCum'),{labels:r.rows.map(x=>x.y),yfmt:tr,series:[{color:(v)=>v<0?'#e03131':'#2f9e44',data:r.rows.map(x=>x.cum)}]});
+ const ys=r.rows.slice(1);
+ chart($('chBillY'),{labels:ys.map(x=>x.y),yfmt:tr,series:[{name:'Trước',color:'#868e96',data:ys.map(x=>x.before)},{name:'Sau',color:'#c7000b',data:ys.map(x=>x.after)}]});
+ chart($('chBillM'),{labels:r.years[0].m.map((m,i)=>'T'+(i+1)),yfmt:tr,series:[{name:'Trước',color:'#868e96',data:r.years[0].m.map(m=>m.before)},{name:'Sau',color:'#c7000b',data:r.years[0].m.map(m=>m.after)}]});
+ chart($('chDeg'),{labels:r.deg.map((v,i)=>i),type:'line',yfmt:v=>v.toFixed(0),series:[{color:'#5f3dc4',data:r.deg}]});
+ const m=r.years[0].m;
+ $('energy').innerHTML=`<p>Sạc: <b>${vnd(y1.chg)} kWh</b> · Xả: <b>${vnd(y1.dis)} kWh</b> · Chu kỳ tương đương: <b>${y1.cycles.toFixed(0)}</b></p><table><tr><th>Tháng</th><th>Tải (kWh)</th><th>Sạc</th><th>Xả</th><th>Tiết kiệm (đ)</th></tr>`+
+  m.map((x,i)=>`<tr><td>T${i+1}</td><td>${vnd(x.load)}</td><td>${vnd(x.chg)}</td><td>${vnd(x.dis)}</td><td>${vnd(x.before-x.after)}</td></tr>`).join('')+'</table>';
+ const c=v=>`<td class="${v<0?'neg':''}">${vnd(v)}</td>`;
+ $('cfTable').innerHTML='<table><tr><th>Năm</th><th>Đầu tư/Thay pin</th><th>O&M</th><th>Tiết kiệm</th>'+(P.loanOn?'<th>Vay/Trả nợ</th>':'')+(P.taxOn?'<th>Thuế</th>':'')+'<th>Giá trị còn lại</th><th>Dòng tiền ròng</th><th>Lũy kế</th><th>Xả (kWh)</th></tr>'+
+  r.rows.map(x=>`<tr><td>${x.y}</td>${c(x.inv)}${c(x.om)}${c(x.sav)}${P.loanOn?c(x.loan):''}${P.taxOn?c(x.tax):''}${c(x.res)}${c(x.net)}${c(x.cum)}<td>${vnd(x.dis||0)}</td></tr>`).join('')+'</table>';
+}
+document.addEventListener('change',e=>{if(e.target.closest('#inputs'))readForm(e);});
+$('sched').addEventListener('click',e=>{const i=e.target.dataset.s;if(i==null)return;const o={I:'C',C:'D',D:'I'};P.schedule[i]=o[P.schedule[i]];sched();calc();});
+fillForm();
+</script></body></html>
