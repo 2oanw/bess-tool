@@ -243,7 +243,7 @@ function simYear(p,loadScale,degF,priceF){
     const nd=DAYS[m]; let nW=0,nE=0;
     for(let d=0;d<nd;d++){((dow+d)%7===0)?nE++:nW++;}
     const unit=p.monthKwh[m]*loadScale/(nW*p.wkRatio+nE); // kWh per weekend-day
-    const mm={load:0,chg:0,dis:0,before:0,after:0,gridAfter:0};
+    const mm={load:0,chg:0,chgCost:0,dis:0,before:0,after:0,gridAfter:0};
     for(let d=0;d<nd;d++,dow=(dow+1)%7){
       const isW=dow!==0, dayK=unit*(isW?p.wkRatio:1), prof=isW?wp:ep;
       // peak-shaving threshold: max kW limit
@@ -259,14 +259,14 @@ function simYear(p,loadScale,degF,priceF){
           else if(act==='C'){ch=Math.min(pcsH*rte,usable-stored);} // stored in delivered units
         }
         if(ch<0)ch=0; stored+=ch-di; const gridCh=ch/rte;
-        mm.load+=L; mm.chg+=gridCh; mm.dis+=di;
+        mm.load+=L; mm.chg+=gridCh; mm.chgCost+=gridCh*pr; mm.dis+=di;
         mm.before+=L*pr; mm.after+=(L-di+gridCh)*pr; mm.gridAfter+=L-di+gridCh;
       }
     }
     if(p.custType==='Sinh hoạt'){mm.before=tierBill(mm.load,p.tiers)*priceF;mm.after=tierBill(mm.gridAfter,p.tiers)*priceF;}
-    res.m.push(mm); res.chg+=mm.chg; res.dis+=mm.dis; res.before+=mm.before; res.after+=mm.after;
+    res.m.push(mm); res.chg+=mm.chg; res.chgCost=(res.chgCost||0)+mm.chgCost; res.dis+=mm.dis; res.before+=mm.before; res.after+=mm.after;
   }
-  res.usable=usable; res.cycles=usable>0?res.dis/(p.cap*(p.socMax-p.socMin)):0; return res;}
+  res.usable=usable; res.cycles=usable>0?res.dis/usable:0; return res;}
 
 function payback(cf){ // cf[0..N] net flows; interpolated simple payback
   let cum=cf[0]; if(cum>=0) return 0;
@@ -296,10 +296,10 @@ function run(p){
     const repl=(p.replaceYear>0&&y===p.replaceYear)?-capex*p.replaceCost:0;
     const loanPay=(loanAmt>0&&y<=p.loanTerm)?-ann:0;
     const tax=p.taxOn?-Math.max(0,(sav+om/(1+p.vatOm)-dep)*p.tax):0;
-    const resv=(y===N)?capex*p.residual:0;
+    const resv=(y===N)?capex/(1+p.vatDev)*p.residual:0;
     const net=sav+om+repl+loanPay+tax+resv; cum+=net;
     rows.push({y,inv:repl,om,sav,loan:loanPay,tax,res:resv,net,cum,before:s.before,after:s.after,chg:s.chg,dis:s.dis,cycles:s.cycles,deg:deg[y]});
-    const df=Math.pow(1+p.disc,y); pvCost+=(-om-repl)/df - resv/df; pvDis+=s.dis/df;
+    const df=Math.pow(1+p.disc,y); pvCost+=(-om-repl)/df - resv/df + (s.chgCost||0)/df; pvDis+=s.dis/df;
   }
   const cf=rows.map(r=>r.net);
   return {rows,years,deg,capex,omTotal:rows.reduce((a,r)=>a+r.om,0),cum,
@@ -315,7 +315,7 @@ function defaults(){
    priceGrowth:0.01,annual:145000,monthKwh:splitMonths(145000),profWork:PROFILES['Thương mại 2 đỉnh'].slice(),profWeekend:PROFILES['Thương mại 2 đỉnh'].map(v=>v),
    profWorkName:'Thương mại 2 đỉnh',profWeekendName:'Thương mại 2 đỉnh',wkRatio:1.0,loadGrowth:0.01,
    cap:215,pcs:108,priceKwh:5000000,om:50000,mode:'tou',schedule:sched,noSunday:true,minDisBand:1,peakLimit:30,
-   socMax:0.98,socMin:0.10,backupSoc:0.40,rte:0.92,degMode:'default',degFirst:5,degNext:2.5,degCustom:DEG_DEFAULT.slice(),replaceYear:0,replaceCost:0.6,
+   socMax:0.98,socMin:0.10,backupSoc:0.40,rte:0.913,degMode:'default',degFirst:5,degNext:2.5,degCustom:DEG_DEFAULT.slice(),replaceYear:0,replaceCost:0.6,
    years:20,disc:0.06,residual:0.05,vatDev:0.10,vatOm:0.10,taxOn:false,tax:0.25,loanOn:false,loanPct:0.7,loanRate:0.09,loanTerm:7,subsidy:0});
 }
 const E={TARIFF_SETS,schedFor,MODELS,MODEL_COMMON,SHEET_CSV,loadModelsFromSheet,modelsFromCsv,applyModel,TARIFF,TIERS,DEG_DEFAULT,PROFILES,DAYS,band,norm,splitMonths,degCurve,tierBill,simYear,payback,npv,irr,run,defaults};
