@@ -39,10 +39,23 @@ button{background:#c7000b;color:#fff;border:none;border-radius:6px;padding:8px 1
   <div class="note" id="tariffNote"></div>
  </div>
  <div class="card"><h2>3. Tiêu thụ điện</h2>
+  <div style="display:flex;gap:14px;margin-bottom:6px;flex-wrap:wrap">
+   <label style="justify-content:flex-start;gap:6px"><input type="radio" name="loadMode" value="annual" checked> Nhập theo điện năng năm + mẫu phụ tải</label>
+   <label style="justify-content:flex-start;gap:6px"><input type="radio" name="loadMode" value="data"> Dữ liệu thực tế (file công tơ theo giờ / 30 phút)</label></div>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
+  <div style="flex:1 1 260px;min-width:240px">
+  <div id="lmAnnual">
   <label><span>Điện năng tiêu thụ năm (kWh)</span><input id="annual" type="number"></label>
   <label><span>Biểu đồ phụ tải ngày làm việc</span><select id="profWorkName"></select></label>
-  <label><span>Biểu đồ phụ tải Chủ nhật</span><select id="profWeekendName"></select></label>
-  <div class="chart" id="chLoadIn"></div><div class="note">Công suất phụ tải trung bình theo giờ (kW), tính từ điện năng năm và mẫu phụ tải.</div>
+  <label><span>Biểu đồ phụ tải Chủ nhật</span><select id="profWeekendName"></select></label></div>
+  <div id="lmData" style="display:none">
+   <label><span>File dữ liệu (.csv, .xlsx)</span><input id="loadFile" type="file" accept=".csv,.txt,.xlsx,.xls"></label>
+   <label><span>Đơn vị cột số liệu</span><select id="loadUnit"><option value="kW">Công suất (kW)</option><option value="kWh">Điện năng mỗi bước (kWh)</option></select></label>
+   <div class="note">File gồm cột <b>Thời gian</b> (vd 01/01/2025 00:30) và cột <b>số liệu</b>, bước 30 phút hoặc 1 giờ. Tool tự tính điện năng từng tháng, tỷ lệ ngày làm việc/Chủ nhật và biểu đồ phụ tải trung bình theo giờ. Tháng thiếu dữ liệu sẽ lấy trung bình các tháng có dữ liệu.</div>
+   <div id="loadInfo" class="note" style="color:#0b7a3b;font-weight:600"></div></div>
+  </div>
+  <div style="flex:1 1 300px;min-width:260px"><div class="chart" id="chLoadIn"></div><div class="note">Công suất phụ tải trung bình theo giờ (kW).</div></div>
+  </div>
   <details><summary>Nâng cao – tiêu thụ</summary>
    <label><span>Tỷ lệ tiêu thụ ngày làm việc : Chủ nhật</span><input id="wkRatio" type="number" step="0.1"></label>
    <label><span>Tăng tiêu thụ hằng năm (%)</span><input id="loadGrowth" type="number" step="0.1"></label>
@@ -311,7 +324,7 @@ function schedFor(sch){const s=Array(24).fill('I');
   return s;}
 function defaults(){
   const sched=schedFor('963');
-  return applyModel({model:'LUNA2000-215-2S10',qty:1,name:'Dự án BESS mẫu',tariffSet:'963',bands:'963',priceMode:'kwh',custType:'Sản xuất',voltage:'22-<110kV',prices:[1190,1833,3398],tiers:TIERS.map(t=>t.slice()),
+  return applyModel({model:'LUNA2000-215-2S10',qty:1,name:'Dự án BESS mẫu',tariffSet:'963',loadMode:'annual',loadUnit:'kW',bands:'963',priceMode:'kwh',custType:'Sản xuất',voltage:'22-<110kV',prices:[1190,1833,3398],tiers:TIERS.map(t=>t.slice()),
    priceGrowth:0.01,annual:145000,monthKwh:splitMonths(145000),profWork:PROFILES['Thương mại 2 đỉnh'].slice(),profWeekend:PROFILES['Thương mại 2 đỉnh'].map(v=>v),
    profWorkName:'Thương mại 2 đỉnh',profWeekendName:'Thương mại 2 đỉnh',wkRatio:1.0,loadGrowth:0.01,
    cap:215,pcs:108,priceKwh:5000000,om:50000,mode:'tou',schedule:sched,noSunday:true,minDisBand:1,peakLimit:30,
@@ -359,6 +372,9 @@ function readForm(e){const t=e.target;
  else if(t.dataset.tier!=null)P.tiers[+t.dataset.tier][1]=+t.value;
  else if(t.dataset.month!=null){P.monthKwh[+t.dataset.month]=+t.value;P.annual=P.monthKwh.reduce((a,b)=>a+b,0);$('annual').value=Math.round(P.annual);}
  else if(t.dataset.prof){P[t.dataset.prof][+t.dataset.h]=+t.value;$(t.dataset.prof+'Name').value='Tùy chỉnh';P[t.dataset.prof+'Name']='Tùy chỉnh';}
+ else if(t.name==='loadMode'){P.loadMode=t.value;lmShow();}
+ else if(t.id==='loadFile'){if(t.files[0])readLoadFile(t.files[0]);return;}
+ else if(t.id==='loadUnit'){P.loadUnit=t.value;if(LASTROWS)applyLoad(LASTROWS);return;}
  else if(t.name==='tariffSet'){P.tariffSet=t.value;applyTariff();setVolt();tariffBox();priceBox();sched();}
  else if(t.id==='priceTotal'){P.priceKwh=P.cap>0?+t.value/P.cap:0;$('priceKwh').value=Math.round(P.priceKwh);}
  else if(t.id==='priceMode'){P.priceMode=t.value;priceSync();}
@@ -375,8 +391,38 @@ function readForm(e){const t=e.target;
  if(t.id==='degMode')degBox();if(t.id==='mode')sched();
  if(['cap','qty','model'].includes(t.id)){if(P.priceMode==='total'&&P.cap>0)P.priceKwh=+$('priceTotal').value/P.cap;priceSync();}
  calc();}
+
+let LASTROWS=null;
+function lmShow(){const d=P.loadMode==='data';$('lmAnnual').style.display=d?'none':'';$('lmData').style.display=d?'':'none';document.querySelectorAll('[name=loadMode]').forEach(r=>r.checked=r.value===(P.loadMode||'annual'));}
+function parseTime(v){if(v instanceof Date)return v;if(typeof v==='number'&&v>20000&&v<80000)return new Date(Math.round((v-25569)*864e5)+new Date().getTimezoneOffset()*6e4);
+ const s=String(v).trim();let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})[ T]+(\d{1,2}):(\d{2})/);if(m)return new Date(+m[3],m[2]-1,+m[1],+m[4],+m[5]);
+ m=s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})[ T]+(\d{1,2}):(\d{2})/);if(m)return new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5]);return null;}
+function toNum(v){if(typeof v==='number')return v;let s=String(v).trim().replace(/\s/g,'');if(/,\d{1,3}$/.test(s)&&!/\.\d+,/.test(s))s=s.replace(/\./g,'').replace(',','.');else s=s.replace(/,/g,'');const n=parseFloat(s);return isNaN(n)?null:n;}
+function readLoadFile(f){$('loadInfo').style.color='#0b7a3b';$('loadInfo').textContent='Đang đọc file…';
+ if(/\.xlsx?$/i.test(f.name)){const go=()=>f.arrayBuffer().then(b=>{const wb=XLSX.read(b,{cellDates:true});applyLoad(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true}));});
+  if(window.XLSX)go();else{const sc=document.createElement('script');sc.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';sc.onload=go;sc.onerror=()=>loadErr('Không tải được bộ đọc Excel (cần mạng). Anh lưu file thành CSV rồi tải lại.');document.head.appendChild(sc);}}
+ else f.text().then(tx=>{const sep=(tx.split('\n')[0].match(/;/g)||[]).length>(tx.split('\n')[0].match(/,/g)||[]).length?';':(tx.includes('\t')?'\t':',');applyLoad(tx.split(/\r?\n/).map(l=>l.split(sep).map(c=>c.replace(/^"|"$/g,''))));});}
+function loadErr(m){$('loadInfo').style.color='#c7000b';$('loadInfo').textContent=m;}
+function applyLoad(rows){LASTROWS=rows;const pts=[];
+ for(const r of rows){if(!r||r.length<2)continue;let d=null,v=null;
+  if(r.length>=3&&!parseTime(r[0])&&typeof r[0]==='string'&&parseTime(r[0]+' '+r[1])){d=parseTime(r[0]+' '+r[1]);}else d=parseTime(r[0]);
+  if(!d)continue;for(let i=r.length-1;i>=1;i--){const n=toNum(r[i]);if(n!=null){v=n;break;}}if(v==null)continue;pts.push([d,v]);}
+ if(pts.length<48)return loadErr('Không đọc được dữ liệu: cần cột thời gian và cột số liệu, ít nhất 1 ngày.');
+ pts.sort((a,b)=>a[0]-b[0]);const diffs=[];for(let i=1;i<Math.min(pts.length,500);i++)diffs.push((pts[i][0]-pts[i-1][0])/36e5);diffs.sort((a,b)=>a-b);const dt=diffs[diffs.length>>1]||1;
+ const mon=Array(12).fill(0),monDays=Array(12).fill(null).map(()=>new Set()),hW=Array(24).fill(0),hE=Array(24).fill(0),dW=new Set(),dE=new Set();
+ for(const [d,v] of pts){const e=P.loadUnit==='kWh'?v:v*dt;const key=d.toDateString();mon[d.getMonth()]+=e;monDays[d.getMonth()].add(key);
+  if(d.getDay()===0){hE[d.getHours()]+=e;dE.add(key);}else{hW[d.getHours()]+=e;dW.add(key);}}
+ const DIM=[31,28,31,30,31,30,31,31,30,31,30,31];const perDay=mon.map((v,i)=>monDays[i].size?v/monDays[i].size:null);const have=perDay.filter(x=>x!=null);const avg=have.reduce((a,b)=>a+b,0)/have.length;
+ P.monthKwh=perDay.map((v,i)=>(v==null?avg:v)*DIM[i]);P.annual=P.monthKwh.reduce((a,b)=>a+b,0);
+ const sw=hW.reduce((a,b)=>a+b,0),se=hE.reduce((a,b)=>a+b,0);
+ if(sw>0)P.profWork=hW.map(v=>v/sw*100);P.profWeekend=se>0?hE.map(v=>v/se*100):P.profWork.slice();
+ const aw=dW.size?sw/dW.size:0,ae=dE.size?se/dE.size:aw;P.wkRatio=ae>0?+(aw/ae).toFixed(3):1;
+ P.profWorkName=P.profWeekendName='Tùy chỉnh';['annual','wkRatio'].forEach(k=>$(k).value=k==='annual'?Math.round(P.annual):P.wkRatio);
+ const days=new Set(pts.map(p=>p[0].toDateString())).size;
+ $('loadInfo').style.color='#0b7a3b';$('loadInfo').textContent=`Đã đọc ${pts.length.toLocaleString('vi-VN')} dòng, ${days} ngày, bước ${dt*60} phút. Điện năng quy ra cả năm ≈ ${Math.round(P.annual).toLocaleString('vi-VN')} kWh; tỷ lệ ngày làm việc/CN = ${P.wkRatio}.`;
+ monthBox();profBox();calc();}
 function priceSync(){$('priceTotal').value=Math.round(P.priceKwh*P.cap);$('priceKwh').disabled=P.priceMode==='total';$('priceTotal').disabled=P.priceMode!=='total';}
-function render(){tariffBox();priceSync();priceBox();monthBox();profBox();degBox();sched();calc();}
+function render(){lmShow();tariffBox();priceSync();priceBox();monthBox();profBox();degBox();sched();calc();}
 function resetAll(){P=E.defaults();fillForm();}
 /* ---- SVG charts ---- */
 function chart(el,{labels,series,type='bar',step=false,yfmt=v=>v.toLocaleString('vi-VN')}){
@@ -389,7 +435,7 @@ function chart(el,{labels,series,type='bar',step=false,yfmt=v=>v.toLocaleString(
  const ev=Math.ceil(n/14);labels.forEach((l,i)=>{if(i%ev===0)s+=`<text x="${type==='bar'?X(i):X(i)+(step?(W-L-R)/n/2:0)}" y="${H-B+14}" text-anchor="middle" fill="#666">${l}</text>`;});
  const bw=(W-L-R)/n*.8/series.length;
  series.forEach((se,j)=>{if(type==='bar'){se.data.forEach((v,i)=>{const x=X(i)-(W-L-R)/n*.4+j*bw,y0=Y(0),y=Y(v);s+=`<rect x="${x}" y="${Math.min(y,y0)}" width="${bw-1}" height="${Math.abs(y0-y)}" fill="${se.color&&typeof se.color==='function'?se.color(v,i):se.color}"><title>${l(labels[i])}: ${vnd(v)}</title></rect>`;});}
-  else{let d='';se.data.forEach((v,i)=>{if(step){d+=(i?'L':'M')+X(i)+','+Y(v)+'L'+X(i+1)+','+Y(v);}else d+=(i?'L':'M')+X(i)+','+Y(v);});s+=`<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2"/>`;
+  else{let d='';se.data.forEach((v,i)=>{if(step){d+=(i?'L':'M')+X(i)+','+Y(v)+'L'+X(i+1)+','+Y(v);}else d+=(i?'L':'M')+X(i)+','+Y(v);});s+=`<path d="${d}" fill="none" stroke="${se.color}" stroke-width="${se.width||2}" ${se.dash?`stroke-dasharray="${se.dash}"`:''}/>`;
    if(!step)se.data.forEach((v,i)=>s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="2.5" fill="${se.color}"><title>${labels[i]}: ${vnd(v)}</title></circle>`);}});
  s+='</svg>'+(series.length>1||series[0].name?'<div class="legend">'+series.map(se=>`<i style="background:${typeof se.color==='string'?se.color:'#888'}"></i>${se.name||''}`).join('')+'</div>':'');
  el.innerHTML=s;function l(x){return x}}
@@ -410,7 +456,7 @@ function calc(){
  chart($('chPrice'),{labels:pr.map(s=>s%2?'':s/2+'h'),step:true,type:'line',series:[{name:'T2–T7',color:'#c7000b',data:pr.map(s=>P.custType==='Sinh hoạt'?P.tiers[0][1]:P.prices[E.band(1,s,P.bands)])},{name:'Chủ nhật',color:'#1c7ed6',data:pr.map(s=>P.custType==='Sinh hoạt'?P.tiers[0][1]:P.prices[E.band(0,s,P.bands)])}]});
  const nw=E.norm(P.profWork),ne=E.norm(P.profWeekend);
  {let nW=0,nE=0;for(let d=0;d<365;d++)((4+d)%7===0)?nE++:nW++;const u=P.annual/(nW*P.wkRatio+nE);
-  chart($('chLoadIn'),{labels:[...Array(24).keys()].map(h=>h+'h'),type:'line',yfmt:v=>v.toFixed(0),series:[{name:'Ngày làm việc (kW)',color:'#e8590c',data:nw.map(v=>u*P.wkRatio*v/100)},{name:'Chủ nhật (kW)',color:'#1c7ed6',data:ne.map(v=>u*v/100)}]});}
+  chart($('chLoadIn'),{labels:[...Array(24).keys()].map(h=>h+'h'),type:'line',yfmt:v=>v.toFixed(0),series:[{name:'Ngày làm việc (kW) – nét đứt',color:'#e8590c',width:3,dash:'7 4',data:nw.map(v=>u*P.wkRatio*v/100)},{name:'Chủ nhật (kW)',color:'#1c7ed6',width:1.5,data:ne.map(v=>u*v/100)}]});}
  chart($('chProf'),{labels:[...Array(24).keys()].map(h=>h+'h'),type:'bar',yfmt:v=>v.toFixed(1),series:[{name:'Ngày làm việc',color:'#e8590c',data:nw},{name:'Chủ nhật',color:'#1c7ed6',data:ne}]});
  chart($('chMonth'),{labels:P.monthKwh.map((v,i)=>'T'+(i+1)),series:[{color:'#2b8a3e',data:P.monthKwh}]});
  chart($('chCum'),{labels:r.rows.map(x=>x.y),yfmt:tr,series:[{color:(v)=>v<0?'#e03131':'#2f9e44',data:r.rows.map(x=>x.cum)}]});
