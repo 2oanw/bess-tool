@@ -107,7 +107,7 @@ button{background:#c7000b;color:#fff;border:none;border-radius:6px;padding:8px 1
   <div class="card"><h2>Năng lượng năm 1</h2><div id="energy"></div></div>
  </div>
  <div class="card"><h2>Bảng dòng tiền theo năm (đ)</h2><div class="scroll" id="cfTable"></div></div>
- <div class="card note">Giả định & giới hạn: mô phỏng 365 ngày × 48 khung 30 phút cho mỗi năm; phụ tải = điện năng tháng × tỷ trọng giờ; pin chỉ cấp cho tải, không phát lên lưới; năng lượng sạc = năng lượng xả / RTE; dung lượng khả dụng = dung lượng × (SOC max − SOC min) × hệ số suy giảm (trung bình đầu/cuối năm). Với khách hàng Sinh hoạt (giá bậc thang, không có TOU), pin chỉ làm tăng điện năng do tổn hao nên tiết kiệm ≈ 0 hoặc âm – chỉ mang tính tham khảo (dự phòng). Giá bậc >300 kWh cần kiểm tra. Hoàn vốn = năm k + |lũy kế k| / dòng tiền năm k+1. LCOS = (vốn + PV O&M + PV thay pin − PV giá trị còn lại) / PV điện năng xả. Không tính giảm CO₂ (không có PV).</div>
+ <div class="card note">Giả định & giới hạn: mô phỏng 365 ngày × 48 khung 30 phút cho mỗi năm; phụ tải = điện năng tháng × tỷ trọng giờ; pin chỉ cấp cho tải, không phát lên lưới; năng lượng sạc = năng lượng xả / RTE; dung lượng khả dụng = dung lượng × (SOC max − SOC min) × hệ số suy giảm (trung bình đầu/cuối năm). Với khách hàng Sinh hoạt (giá bậc thang, không có TOU), pin chỉ làm tăng điện năng do tổn hao nên tiết kiệm ≈ 0 hoặc âm – chỉ mang tính tham khảo (dự phòng). Giá bậc sinh hoạt theo QĐ 1279 (301–400: 3.350; từ 401: 3.460 đ/kWh, chưa VAT). Hoàn vốn = năm k + |lũy kế k| / dòng tiền năm k+1. LCOS = (vốn + PV O&M + PV thay pin − PV giá trị còn lại) / PV điện năng xả. Không tính giảm CO₂ (không có PV).</div>
 </div></div>
 <script>/* BESS engine – shared by index.html (inlined) and test.js */
 (function(root){
@@ -116,7 +116,7 @@ const TARIFF = {
   'Kinh doanh': {'>=22kV':[1609,2887,5025],'6-<22kV':[1829,3108,5202],'<6kV':[1918,3152,5422]},
   'Sinh hoạt': {'Hạ áp':null}
 };
-// tiers: [upper kWh, price]; >300 values editable, "cần kiểm tra"
+// tiers: [upper kWh, price] theo QĐ 1279/QĐ-BCT (xác nhận 2026-10-13)
 const TIERS = [[50,1984],[100,2050],[200,2380],[300,2998],[400,3350],[Infinity,3460]];
 const DEG_DEFAULT=[100,94,91.5,89.5,87.8,86.2,84.6,83.1,81.6,80.2,78.7,77.4,76,74.6,73.3,72,70.7,69.4,68.1,66.8,65.5];
 const PROFILES = {
@@ -127,14 +127,73 @@ const PROFILES = {
  'Công nghiệp 2 đỉnh':[1.5,1.5,1.5,1.5,1.5,2,3,5,6.5,7,7,5,4,6,7,7,6.5,5.5,4,3,2.5,2,1.5,1.5],
  'Công nghiệp 3 ca':[3.8,3.8,3.8,3.8,3.8,3.8,4,4.3,4.5,4.6,4.6,4.4,4,4.4,4.6,4.6,4.5,4.2,4,4,4,4,4,3.9]
 };
-// Editable product DB – add more objects here
-const MODELS=[
+// Editable product DB – fallback hardcoded; live source is Google Sheet (anyone-with-link)
+const SHEET_CSV='https://docs.google.com/spreadsheets/d/15GgnE2QSRYOSWgWpEicxqjiSRqdppAgSstx54x5D5Ac/gviz/tq?tqx=out:csv';
+let MODELS=[
  {id:'LUNA2000-215-2S10',cap:215.0,cp:0.5,rte:91.3,dod:'0–100%',cell:'280Ah',cfg:'240S1P',packs:4,volt:'648–864 V',weight:'≤2,8 t',dim:'1150×1800×2100 mm'},
  {id:'LUNA2000-241-2S1',cap:241.0,cp:null,rte:91.3,dod:'0–100%',cell:'314Ah',cfg:'240S1P',packs:4,volt:'648–852 V',weight:'<2,8 t',dim:'–'},
  {id:'LUNA2000-215-2S11',cap:215.0,cp:0.5,rte:89.0,dod:'–',cell:'280Ah',cfg:'240S1P',packs:4,volt:'648–864 V',weight:'≤2,8 t',dim:'–'},
  {id:'LUNA2000-161-2S11',cap:161.3,cp:0.67,rte:88.0,dod:'–',cell:'280Ah',cfg:'180S1P',packs:3,volt:'486–648 V',weight:'≤2,4 t',dim:'–'},
  {id:'LUNA2000-107-1S11',cap:107.5,cp:1,rte:86.0,dod:'–',cell:'280Ah',cfg:'120S1P',packs:2,volt:'324–432 V',weight:'≤2,0 t',dim:'–'}];
 const MODEL_COMMON={pcs:'PCS2000-108K-MB1',pcsKw:108,type:'Huawei Smart String ESS làm mát bằng chất lỏng, LFP',temp:'-30…55 °C',ip:'IP55',aux:'≤150 W',comm:'Modbus TCP'};
+function parseCsv(text){
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i], n=text[i+1];
+    if(q){ if(c==='"'&&n==='"'){cur+='"';i++;} else if(c==='"') q=false; else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){row.push(cur);cur='';}
+    else if(c==='\r'){}
+    else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';}
+    else cur+=c;
+  }
+  if(cur.length||row.length){row.push(cur);rows.push(row);}
+  return rows;
+}
+function modelsFromCsv(text){
+  const rows=parseCsv(text); if(rows.length<2) return null;
+  const h=rows[0].map(x=>x.trim());
+  const ix=n=>h.indexOf(n);
+  const iModel=ix('Model'), iCap=ix('Dung luong (kWh)'), iC=ix('Toc do sac xa (C)'), iRte=ix('Hieu suat RTE (%)');
+  const iDod=ix('Do sau xa (DoD)'), iCell=ix('Dung luong cell (Ah)'), iCfg=ix('Cau hinh'), iPacks=ix('So pack');
+  const iVolt=ix('Dai dien ap DC (V)'), iW=ix('Khoi luong (tan)'), iDim=ix('Kich thuoc (mm)');
+  if(iModel<0||iCap<0||iRte<0) return null;
+  const out=[];
+  for(let r=1;r<rows.length;r++){
+    const cells=rows[r]; if(!cells[iModel]) continue;
+    const cpRaw=(iC>=0?cells[iC]:'').trim();
+    const packsRaw=(iPacks>=0?cells[iPacks]:'').trim();
+    const cellAh=(iCell>=0?cells[iCell]:'').trim();
+    const wRaw=(iW>=0?cells[iW]:'').trim();
+    const dimRaw=(iDim>=0?cells[iDim]:'').trim();
+    out.push({
+      id:cells[iModel].trim(),
+      cap:parseFloat(cells[iCap])||0,
+      cp:cpRaw===''?null:parseFloat(cpRaw),
+      rte:parseFloat(cells[iRte])||0,
+      dod:(iDod>=0&&cells[iDod]?cells[iDod]:'–').trim()||'–',
+      cell:cellAh?cellAh+'Ah':'–',
+      cfg:(iCfg>=0&&cells[iCfg]?cells[iCfg]:'–').trim()||'–',
+      packs:packsRaw===''?null:parseInt(packsRaw,10),
+      volt:(iVolt>=0&&cells[iVolt]?cells[iVolt].replace(/-/g,'–'):'–').trim()||'–',
+      weight:wRaw?wRaw.replace('<=','≤').replace('<','<')+( /t/i.test(wRaw)?'':' t'):'–',
+      dim:dimRaw||'–'
+    });
+  }
+  return out.length?out:null;
+}
+function loadModelsFromSheet(){
+  if(typeof fetch!=='function') return Promise.resolve(false);
+  return fetch(SHEET_CSV,{credentials:'omit'}).then(r=>{
+    if(!r.ok) throw new Error('sheet '+r.status);
+    return r.text();
+  }).then(text=>{
+    const next=modelsFromCsv(text);
+    if(!next) return false;
+    MODELS.length=0; next.forEach(m=>MODELS.push(m));
+    return true;
+  }).catch(()=>false);
+}
 function applyModel(p){const m=MODELS.find(x=>x.id===p.model);if(!m)return p;const q=p.qty||1;
  p.cap=+(m.cap*q).toFixed(1);p.pcs=+(Math.min(MODEL_COMMON.pcsKw,m.cp?m.cap*m.cp:Infinity)*q).toFixed(1);p.rte=m.rte/100;return p;}
 const DAYS=[31,28,31,30,31,30,31,31,30,31,30,31];
@@ -238,7 +297,7 @@ function defaults(){
    socMax:0.98,socMin:0.10,backupSoc:0.40,rte:0.92,degMode:'default',degFirst:5,degNext:2.5,degCustom:DEG_DEFAULT.slice(),replaceYear:0,replaceCost:0.6,
    years:20,disc:0.06,residual:0.05,vatDev:0.10,vatOm:0.10,taxOn:false,tax:0.25,loanOn:false,loanPct:0.7,loanRate:0.09,loanTerm:7,subsidy:0});
 }
-const E={MODELS,MODEL_COMMON,applyModel,TARIFF,TIERS,DEG_DEFAULT,PROFILES,DAYS,band,norm,splitMonths,degCurve,tierBill,simYear,payback,npv,irr,run,defaults};
+const E={MODELS,MODEL_COMMON,SHEET_CSV,loadModelsFromSheet,modelsFromCsv,applyModel,TARIFF,TIERS,DEG_DEFAULT,PROFILES,DAYS,band,norm,splitMonths,degCurve,tierBill,simYear,payback,npv,irr,run,defaults};
 if(typeof module!=='undefined')module.exports=E; else root.BESS=E;
 })(this);
 </script>
@@ -261,7 +320,7 @@ function fillForm(){
 function setVolt(){const t=E.TARIFF[P.custType];$('voltage').innerHTML=Object.keys(t).map(v=>`<option>${v}</option>`).join('');
  if(!t[P.voltage])P.voltage=Object.keys(t)[0];$('voltage').value=P.voltage;}
 function priceBox(){
- if(P.custType==='Sinh hoạt'){let lo=0;$('priceBox').innerHTML='<table><tr><th>Bậc (kWh/tháng)</th><th>Giá</th></tr>'+P.tiers.map((t,i)=>{const r=`<tr><td>${lo+ (i?1:0)}–${t[0]===Infinity?'trở lên':t[0]}${i>=4?' <span class="warn">(cần kiểm tra)</span>':''}</td><td><input data-tier="${i}" type="number" value="${t[1]}"></td></tr>`;lo=t[0];return r;}).join('')+'</table><div class="warn">Sinh hoạt không áp dụng giá theo giờ – pin hầu như không tạo tiết kiệm.</div>';}
+ if(P.custType==='Sinh hoạt'){let lo=0;$('priceBox').innerHTML='<table><tr><th>Bậc (kWh/tháng)</th><th>Giá</th></tr>'+P.tiers.map((t,i)=>{const r=`<tr><td>${lo+ (i?1:0)}–${t[0]===Infinity?'trở lên':t[0]}</td><td><input data-tier="${i}" type="number" value="${t[1]}"></td></tr>`;lo=t[0];return r;}).join('')+'</table><div class="warn">Sinh hoạt không áp dụng giá theo giờ – pin hầu như không tạo tiết kiệm.</div>';}
  else $('priceBox').innerHTML='<table><tr><th>Thấp điểm</th><th>Bình thường</th><th>Cao điểm</th></tr><tr>'+P.prices.map((v,i)=>`<td><input data-price="${i}" type="number" value="${v}"></td>`).join('')+'</tr></table>';}
 function monthBox(){$('monthBox').innerHTML='<table><tr>'+P.monthKwh.map((v,i)=>`<th>T${i+1}</th>`).join('')+'</tr><tr>'+P.monthKwh.map((v,i)=>`<td><input data-month="${i}" type="number" value="${Math.round(v)}"></td>`).join('')+'</tr></table>';}
 function profBox(){let h='<table><tr><th>Giờ</th>'+[...Array(24).keys()].map(i=>`<th>${i}</th>`).join('')+'</tr>';
@@ -338,4 +397,12 @@ function calc(){
 document.addEventListener('change',e=>{if(e.target.closest('#inputs'))readForm(e);});
 $('sched').addEventListener('click',e=>{const i=e.target.dataset.s;if(i==null)return;const o={I:'C',C:'D',D:'I'};P.schedule[i]=o[P.schedule[i]];sched();calc();});
 fillForm();
+E.loadModelsFromSheet().then(ok=>{
+  if(!ok) return;
+  const cur=P.model;
+  $('model').innerHTML=E.MODELS.map(m=>`<option>${m.id}</option>`).join('')+'<option value="custom">Tùy chỉnh</option>';
+  if(E.MODELS.some(m=>m.id===cur))$('model').value=cur;
+  else if(E.MODELS.length){P.model=E.MODELS[0].id;$('model').value=P.model;P=E.applyModel(P);}
+  calc();
+});
 </script></body></html>
